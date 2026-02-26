@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block content %}
+<a href="/editar_fichaje" class="btn btn-info mb-3">
+    Editar fichajes
+</a>
+<h3 class="mb-4">Panel de Administración</h3>
+
+<a href="/crear_usuario" class="btn btn-primary mb-3">
+    Crear usuario
+</a>
+<a href="/auditoria" class="btn btn-dark mb-3">
+    Ver auditoría
+</a>
+<h5 class="mb-3">Exportación por usuario</h5>
+
+<form method="get" action="/exportar_admin" class="row g-2 mb-4">
+
+    <div class="col-md-3">
+        <label class="form-label">Usuario</label>
+        <select name="user_id" class="form-select" required>
+            {% for u in users %}
+                <option value="{{ u[0] }}">{{ u[1] }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label">Desde</label>
+        <input type="date" name="desde" class="form-control" required>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label">Hasta</label>
+        <input type="date" name="hasta" class="form-control" required>
+    </div>
+
+    <div class="col-md-3 d-flex align-items-end">
+        <button type="submit" name="tipo" value="csv" class="btn btn-outline-secondary me-2">
+            CSV
+        </button>
+        <button type="submit" name="tipo" value="pdf" class="btn btn-outline-danger">
+            PDF
+        </button>
+    </div>
+    
+
+</form>
+
+<table class="table table-striped align-middle">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Usuario</th>
+            <th>Activo</th>
+            <th>Estado</th>
+            <th>Contraseña</th>
+        </tr>
+    </thead>
+
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td>{{ u[0] }}</td>
+            <td>{{ u[1] }}</td>
+
+            <!-- ESTADO -->
+            <td>
+                {% if u[2] == 1 %}
+                    <span class="badge bg-success">Activo</span>
+                {% else %}
+                    <span class="badge bg-danger">Desactivado</span>
+                {% endif %}
+            </td>
+
+            <!-- ACTIVAR / DESACTIVAR -->
+            <td>
+                {% if u[1] == 'admin' %}
+                    <button class="btn btn-secondary btn-sm" disabled>
+                        Protegido
+                    </button>
+                {% else %}
+                    <a href="/toggle/{{ u[0] }}"
+                       class="btn btn-warning btn-sm"
+                       onclick="return confirm('¿Seguro que desea cambiar el estado del usuario?');">
+                        Activar / Desactivar
+                    </a>
+                {% endif %}
+            </td>
+
+            <!-- CONTRASEÑA -->
+            <td>
+                <a href="/cambiar_password/{{ u[0] }}" class="btn btn-sm btn-outline-dark">
+   		 Cambiar contraseña
+		</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="/dashboard" class="btn btn-secondary">
+    Volver
+</a>
+
+{% endblock %}
+

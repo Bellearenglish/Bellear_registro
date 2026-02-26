@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h4 class="mb-3">Panel de fichaje</h4>
+
+<div class="mb-3">
+
+    <!-- ENTRADA -->
+    {% if estado == "fuera" %}
+        <a href="/fichar/entrada" class="btn btn-success me-2">
+            Entrada
+        </a>
+    {% else %}
+        <button class="btn btn-success me-2" disabled>
+            Entrada
+        </button>
+    {% endif %}
+
+    <!-- SALIDA -->
+    {% if estado == "dentro" %}
+        <a href="/fichar/salida" class="btn btn-danger">
+            Salida
+        </a>
+    {% else %}
+        <button class="btn btn-danger" disabled>
+            Salida
+        </button>
+    {% endif %}
+
+</div>
+
+<p class="mb-3">
+    Estado actual:
+    {% if estado == "dentro" %}
+        <span class="badge bg-success">Trabajando</span><br>
+        <small class="text-muted">
+            Pulse <strong>Salida</strong> para finalizar la jornada.
+        </small>
+    {% else %}
+        <span class="badge bg-secondary">Fuera</span><br>
+        <small class="text-muted">
+            Pulse <strong>Entrada</strong> para iniciar la jornada.
+        </small>
+    {% endif %}
+</p>
+
+<hr>
+
+<div class="mb-3">
+    <a href="/exportar" class="btn btn-secondary btn-sm me-2">
+        Exportar CSV
+    </a>
+    <a href="/exportar_pdf" class="btn btn-danger btn-sm">
+        Exportar PDF
+    </a>
+</div>
+
+<hr>
+
+<h5>Historial de fichajes</h5>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Tipo</th>
+            <th>Fecha</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for f in fichajes %}
+        <tr>
+            <td>
+                {% if f[0] == 'entrada' %}
+                    <span class="badge bg-success">Entrada</span>
+                {% else %}
+                    <span class="badge bg-danger">Salida</span>
+                {% endif %}
+            </td>
+            <td>{{ f[1] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% endblock %}

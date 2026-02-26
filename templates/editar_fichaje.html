@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h4>Editar fichajes</h4>
+
+<form method="post">
+
+    <div class="row mb-3">
+
+        <div class="col-md-4">
+            <label>Usuario</label>
+            <select name="user_id" class="form-control">
+                {% for u in users %}
+                    <option value="{{u[0]}}">{{u[1]}}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="col-md-4">
+            <label>Fecha</label>
+            <input type="date" name="fecha" class="form-control" required>
+        </div>
+
+        <div class="col-md-4 d-flex align-items-end">
+            <button class="btn btn-primary">Buscar fichajes</button>
+        </div>
+
+    </div>
+
+</form>
+
+{% if registros %}
+<hr>
+<h5>Modificar registros</h5>
+
+<table class="table table-bordered">
+
+<tr>
+    <th>Tipo</th>
+    <th>Fecha</th>
+    <th>Guardar</th>
+    <th>Motivo</th>
+</tr>
+
+{% for r in registros %}
+<tr>
+    <form method="post" action="/guardar_edicion">
+        <td>{{r[1]}}</td>
+        <td>
+            <input type="text"
+                   name="fecha"
+                   value="{{r[2]}}"
+                   class="form-control">
+        </td>
+        <td>
+            <input type="hidden" name="id" value="{{r[0]}}">
+            <button class="btn btn-success btn-sm">Guardar</button>
+        </td>
+	<td>
+    <input type="text" name="motivo"
+           placeholder="Motivo del cambio"
+           class="form-control" required>
+</td>
+    </form>
+</tr>
+{% endfor %}
+
+</table>
+{% endif %}
+
+{% endblock %}

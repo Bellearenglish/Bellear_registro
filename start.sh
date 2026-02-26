@@ -1,0 +1,1 @@
+gunicorn Registro_jornada:app

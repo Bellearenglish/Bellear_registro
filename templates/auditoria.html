@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h4>Auditoría de cambios</h4>
+
+<table class="table table-bordered table-sm">
+<tr>
+    <th>Administrador</th>
+    <th>Usuario</th>
+    <th>Antes</th>
+    <th>Después</th>
+    <th>Motivo</th>
+    <th>Fecha modificación</th>
+</tr>
+
+{% for l in logs %}
+<tr>
+    <td>{{l[0]}}</td>
+    <td>{{l[1]}}</td>
+    <td>{{l[2]}}</td>
+    <td>{{l[3]}}</td>
+    <td>{{l[4]}}</td>
+    <td>{{l[5]}}</td>
+</tr>
+{% endfor %}
+</table>
+
+{% endblock %}
