@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Acceso denegado</title>
+    <style>
+        body{
+            font-family: Arial, sans-serif;
+            background:#f4f6f9;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            height:100vh;
+        }
+        .box{
+            background:white;
+            padding:40px;
+            border-radius:12px;
+            box-shadow:0 4px 12px rgba(0,0,0,0.15);
+            text-align:center;
+        }
+        h2{ color:#c0392b; }
+        button{
+            margin-top:20px;
+            padding:12px 25px;
+            border:none;
+            background:#0d6efd;
+            color:white;
+            border-radius:6px;
+            cursor:pointer;
+            font-size:16px;
+        }
+        button:hover{
+            background:#0b5ed7;
+        }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h2>No tienes permiso para realizar esta acción</h2>
+        <p>Contacta con el administrador si crees que es un error.</p>
+        <button onclick="history.back()">Volver</button>
+    </div>
+</body>
+</html>

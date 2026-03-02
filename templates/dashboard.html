@@ -1,63 +1,95 @@
+
 {% extends "base.html" %}
 {% block content %}
+<style>
+.mobile-box{
+    max-width:420px;
+    margin:auto;
+}
 
-<h4 class="mb-3">Panel de fichaje</h4>
+.btn-fichar{
+    width:100%;
+    padding:18px;
+    font-size:20px;
+    border-radius:14px;
+    margin-top:10px;
+}
+
+.estado{
+    font-size:22px;
+    font-weight:bold;
+    padding:10px;
+    border-radius:10px;
+}
+
+.estado-dentro{
+    background:#d1e7dd;
+    color:#0f5132;
+}
+
+.estado-fuera{
+    background:#f8d7da;
+    color:#842029;
+}
+</style>
+
+<h4 class="mb-3 text-center">Panel de fichaje</h4>
+
+</div>
+
+<div class="mobile-box">
+
+</div>
+<!-- 🔹 ESTADO VISUAL GRANDE (AÑADIDO) -->
+{% if estado == "dentro" %}
+<div class="estado estado-dentro text-center mb-3">
+    Estás trabajando
+</div>
+{% else %}
+<div class="estado estado-fuera text-center mb-3">
+    Estás fuera del trabajo
+</div>
+{% endif %}
+
 
 <!-- FILA SUPERIOR: FICHAJE + EXPORTACIÓN -->
 <div class="row align-items-end mb-4">
 
     <!-- ENTRADA / SALIDA -->
     <div class="col-md-6 mb-3">
+
         {% if estado == "fuera" %}
-            <a href="/fichar/entrada" class="btn btn-success me-2">
-                Entrada
+            <a href="/fichar/entrada" class="btn btn-success btn-fichar">
+                Fichar entrada
             </a>
         {% else %}
-            <button class="btn btn-success me-2" disabled>
-                Entrada
+            <button class="btn btn-success btn-fichar" disabled>
+                Entrada registrada
             </button>
         {% endif %}
 
         {% if estado == "dentro" %}
-            <a href="/fichar/salida" class="btn btn-danger">
-                Salida
+            <a href="/fichar/salida" class="btn btn-danger btn-fichar">
+                Fichar salida
             </a>
         {% else %}
-            <button class="btn btn-danger" disabled>
-                Salida
+            <button class="btn btn-danger btn-fichar" disabled>
+                Esperando entrada
             </button>
         {% endif %}
+
     </div>
 
-    <!-- EXPORTAR RANGO -->
-    <div class="col-md-6">
-        <form method="get" action="/exportar_rango" class="row g-2 align-items-end">
-
-            <div class="col-md-4">
-                <label class="form-label">Desde</label>
-                <input type="date" name="desde" class="form-control" required>
-            </div>
-
-            <div class="col-md-4">
-                <label class="form-label">Hasta</label>
-                <input type="date" name="hasta" class="form-control" required>
-            </div>
-
-            <div class="col-md-4 text-md-end">
-                <button type="submit" name="tipo" value="csv" class="btn btn-outline-secondary me-2">
-                    Exportar CSV
-                </button>
-                <button type="submit" name="tipo" value="pdf" class="btn btn-outline-danger">
-                    Exportar PDF
-                </button>
-            </div>
-
-        </form>
-    </div>
-
-</div>
-
+    
 <hr>
+
+<!-- 🔹 TARJETA HORAS MES (AÑADIDA) -->
+<div class="card text-center mb-3">
+    <div class="card-body">
+        <h6 class="text-muted">Total trabajado</h6>
+        <h2>{{ total_horas }} h</h2>
+    </div>
+</div>
 
 <h5>Horas trabajadas</h5>
 
@@ -126,4 +158,7 @@
     </tbody>
 </table>
 
+</div>
 {% endblock %}
+```
+

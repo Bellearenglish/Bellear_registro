@@ -1,3 +1,4 @@
+
 from flask import Flask, render_template, request, redirect, send_file, abort
 from flask_login import LoginManager, login_user, login_required, logout_user, current_user, UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -12,6 +13,14 @@ import os
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
+from io import BytesIO
+from flask import send_file
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+
+import smtplib
+from email.message import EmailMessage
+
 #===================================================
 #         DEFINIR RUTA DE SALIDA GRABAR RESULTADOS
 #==================================================
@@ -36,13 +45,29 @@ def carpeta_empresa(nombre_usuario):
 # APP
 # =====================================================
 app = Flask(__name__)
-app.secret_key = "registro-jornada"
+app.secret_key = "registro_jornada"
 
 login_manager = LoginManager(app)
 login_manager.login_view = "/"
 
 DATABASE = "database.db"
+#==================================================
+#                  DECORADOR DEL SISTEMA
+#=================================================
 
+from functools import wraps
+from flask import abort
+from flask_login import current_user
+
+def solo_admin(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not current_user.is_authenticated:
+            abort(401)
+        if not current_user.is_admin:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated_function
 
 # =====================================================
 # DB
@@ -127,6 +152,8 @@ init_db()
 #=====================================================
 @app.route("/auditoria")
 @login_required
+@solo_admin
+
 def auditoria():
 
     if not current_user.is_admin:
@@ -258,6 +285,7 @@ def dashboard():
 # =====================================================
 @app.route("/admin")
 @login_required
+@solo_admin
 def admin():
 
     if not current_user.is_admin:
@@ -270,10 +298,13 @@ def admin():
     con.close()
 
     return render_template("admin.html", users=users)
-
+# =====================================================
+# CREAR USUARIO
+# =====================================================
 
 @app.route("/crear_usuario", methods=["GET","POST"])
 @login_required
+@solo_admin
 def crear_usuario():
 
     if not current_user.is_admin:
@@ -335,6 +366,7 @@ def toggle_user(user_id):
 # =====================================================
 @app.route("/cambiar_password/<int:user_id>", methods=["GET","POST"])
 @login_required
+@solo_admin
 def cambiar_password(user_id):
 
     if not current_user.is_admin:
@@ -372,6 +404,7 @@ def cambiar_password(user_id):
 # =====================================================
 @app.route("/editar_fichaje", methods=["GET","POST"])
 @login_required
+@solo_admin
 def editar_fichaje():
 
     if not current_user.is_admin:
@@ -413,6 +446,7 @@ def editar_fichaje():
     )
 @app.route("/guardar_edicion", methods=["POST"])
 @login_required
+@solo_admin
 def guardar_edicion():
 
     if not current_user.is_admin:
@@ -508,7 +542,31 @@ def fichar(tipo):
     con.commit()
     con.close()
     return redirect("/dashboard")
+#=====================================================
+#      FUNCION PARA MANDAR CORREOS
+#=====================================================
+def enviar_email(destino, asunto, contenido, archivo_bytes, nombre_archivo):
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = asunto
+        msg["From"] = "oficina.bellearenglish@gmail.com"
+        msg["To"] = destino
 
+        msg.set_content(contenido)
+
+        msg.add_attachment(
+            archivo_bytes,
+            maintype="application",
+            subtype="octet-stream",
+            filename=nombre_archivo
+        )
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login("oficina.bellearenglish@gmail.com", "tubr fixn sxad wpre")
+            smtp.send_message(msg)
+
+    except Exception as e:
+        print("ERROR EMAIL:", e)
 
 # =====================================================
 # FUNCIONES EXPORTACIÓN
@@ -539,16 +597,35 @@ def calcular_detalle(raw):
     return resultado, round(total, 2)
 
 
-def obtener_raw(user_id):
+def obtener_raw(user_id, desde=None, hasta=None):
+
     con = db()
     c = con.cursor()
-    c.execute("""
-        SELECT users.username, fichajes.tipo, fichajes.fecha
-        FROM fichajes
-        JOIN users ON users.id = fichajes.user_id
-        WHERE fichajes.user_id = ?
-        ORDER BY fichajes.fecha
-    """, (user_id,))
+
+    if desde and hasta:
+
+        c.execute("""
+            SELECT users.username, fichajes.tipo, fichajes.fecha
+            FROM fichajes
+            JOIN users ON users.id = fichajes.user_id
+            WHERE fichajes.user_id = ?
+            AND (
+                substr(fichajes.fecha,7,4) || '-' ||
+                substr(fichajes.fecha,4,2) || '-' ||
+                substr(fichajes.fecha,1,2)
+            ) BETWEEN ? AND ?
+            ORDER BY fichajes.fecha
+        """, (user_id, desde, hasta))
+
+    else:
+        c.execute("""
+            SELECT users.username, fichajes.tipo, fichajes.fecha
+            FROM fichajes
+            JOIN users ON users.id = fichajes.user_id
+            WHERE fichajes.user_id = ?
+            ORDER BY fichajes.fecha
+        """, (user_id,))
+
     rows = c.fetchall()
     con.close()
     return rows
@@ -563,129 +640,7 @@ def obtener_nombre_usuario(user_id):
     return r[0] if r else "Desconocido"
 
 
-# =====================================================
-# EXPORTAR USUARIO
-# =====================================================
-@app.route("/exportar_rango")
-@login_required
-def exportar_rango():
 
-    tipo = request.args.get("tipo", "pdf")
-    raw = obtener_raw(current_user.id)
-    rows, total = calcular_detalle(raw)
-    nombre = obtener_nombre_usuario(current_user.id)
-
-    headers = ["Fecha","Entrada","Salida","Horas"]
-
-    # ================= CSV =================
-    
-    if tipo == "csv":
-        import os
-
-        # 📁 Carpeta base
-        carpeta_csv = os.path.join(os.getcwd(), "informes_csv")
-        os.makedirs(carpeta_csv, exist_ok=True)
-
-        # 📁 Carpeta del usuario
-        carpeta_usuario = os.path.join(carpeta_csv, nombre)
-        os.makedirs(carpeta_usuario, exist_ok=True)
-
-        # 📅 Fecha para nombre archivo
-        fecha_archivo = datetime.now().strftime("%Y-%m-%d_%H-%M")
-
-        archivo = os.path.join(
-            carpeta_usuario,
-            f"registro_{nombre}_{fecha_archivo}.csv"
-        )
-
-        with open(archivo, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.writer(f, delimiter=";")
-            w.writerow(["BELLEAR ENGLISH"])
-            w.writerow(["REGISTRO OFICIAL DE JORNADA"])
-            w.writerow([])
-            w.writerow([f"Empleado: {nombre}"])
-            w.writerow([f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"])
-            w.writerow([])
-            w.writerow(headers)
-            w.writerows(rows)
-            w.writerow([])
-            w.writerow(["","","TOTAL",f"{total} horas"])
-
-        os.startfile(carpeta_usuario)
-        return render_template(
-            "mensaje_empresa.html",
-            mensaje=f"Informe CSV generado correctamente",
-            ruta=archivo
-        )
-    
-  
-        
-
-    # ================= PDF =================
-    else:
-        from reportlab.platypus import Image
-        import os
-
-        # 📁 Carpeta destino
-        carpeta_pdf = os.path.join(os.getcwd(), "informes_pdf")
-        os.makedirs(carpeta_pdf, exist_ok=True)
-
-        # 📝 Nombre archivo
-        
-        fecha_archivo = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        nombre_archivo = f"registro_{nombre}_{fecha_archivo}.pdf"
-        
-        ruta_pdf = os.path.join(carpeta_pdf, nombre_archivo)
-        #from datetime import datetime
-
-        
-
-        # 📄 Crear PDF DIRECTO en archivo
-        doc = SimpleDocTemplate(ruta_pdf)
-        styles = getSampleStyleSheet()
-
-        elements = []
-
-        # 🖼 LOGO
-        logo_path = os.path.join(os.getcwd(), "static", "logo.png")
-        if os.path.exists(logo_path):
-            elements.append(Image(logo_path, width=120, height=60))
-            elements.append(Spacer(1,10))
-
-        # CABECERA
-        elements.append(Paragraph("BELLEAR ENGLISH", styles["Title"]))
-        elements.append(Paragraph("REGISTRO OFICIAL DE JORNADA LABORAL", styles["Heading2"]))
-        elements.append(Spacer(1,10))
-        elements.append(Paragraph(f"Empleado: <b>{nombre}</b>", styles["Heading2"]))
-        elements.append(Spacer(1,20))
-
-        # TABLA
-        data = [headers] + rows + [["","","TOTAL",f"{total} horas"]]
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ("GRID",(0,0),(-1,-1),1,colors.black),
-            ("BACKGROUND",(0,0),(-1,0),colors.lightgrey)
-        ]))
-
-        elements.append(table)
-        
-        # ✍️ PIE EMPRESA
-        elements.append(Spacer(1,30))
-        elements.append(Paragraph("Paseo José Saramago 3 Local 3", styles["Normal"]))
-        elements.append(Paragraph("Orkoien - Navarra", styles["Normal"]))
-        elements.append(Paragraph("Fdo. Bellkys Moreno", styles["Normal"]))
-        
-        # 🏁 Construir PDF
-        doc.build(elements)
-
-        # 📥 Pantalla información de fichero creado
-        
-        return render_template(
-            "mensaje_empresa.html",
-            mensaje=f"Informe PDF generado correctamente",
-            ruta_pdf=nombre_archivo
-        )
-    
 
 # =====================================================
 # EXPORTAR ADMIN
@@ -696,121 +651,140 @@ def exportar_admin():
 
     if not current_user.is_admin:
         return redirect("/dashboard")
+    try:
+        user_id = int(request.args.get("user_id"))
+        tipo = request.args.get("tipo","pdf").lower()
+        desde = request.args.get("desde")
+        hasta = request.args.get("hasta")
+        raw = obtener_raw(user_id, desde, hasta)
+        rows,total = calcular_detalle(raw)
+        nombre = obtener_nombre_usuario(user_id)
 
-    user_id = int(request.args.get("user_id"))
-    tipo = request.args.get("tipo","pdf")
-
-    raw = obtener_raw(user_id)
-    rows,total = calcular_detalle(raw)
-    nombre = obtener_nombre_usuario(user_id)
-
-    headers=["Fecha","Entrada","Salida","Horas"]
-
+        headers=["Fecha","Entrada","Salida","Horas"]
+   
     # ================= CSV =================
-    if tipo == "csv":
-        import os
+        if tipo == "csv":
+            import os
 
-        # 📁 Carpeta base
-        carpeta_csv = os.path.join(os.getcwd(), "informes_csv")
-        os.makedirs(carpeta_csv, exist_ok=True)
+            # 📁 Carpeta base
+            carpeta_csv = os.path.join(os.getcwd(), "informes_csv")
+            os.makedirs(carpeta_csv, exist_ok=True)
 
-        # 📁 Carpeta del usuario
-        carpeta_usuario = os.path.join(carpeta_csv, nombre)
-        os.makedirs(carpeta_usuario, exist_ok=True)
+            # 📁 Carpeta del usuario
+            carpeta_usuario = os.path.join(carpeta_csv, nombre)
+            os.makedirs(carpeta_usuario, exist_ok=True)
 
-        # 📅 Fecha para nombre archivo
-        fecha_archivo = datetime.now().strftime("%Y-%m-%d_%H-%M")
+            # 📅 Fecha para nombre archivo
+            fecha_archivo = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
-        archivo = os.path.join(
-            carpeta_usuario,
-            f"registro_{nombre}_{fecha_archivo}.csv"
-        )
+            archivo = os.path.join(
+                carpeta_usuario,
+                f"registro_{nombre}_{fecha_archivo}.csv"
+            )
 
-        with open(archivo, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.writer(f, delimiter=";")
-            w.writerow(["BELLEAR ENGLISH"])
-            w.writerow(["REGISTRO OFICIAL DE JORNADA"])
-            w.writerow([])
-            w.writerow([f"Empleado: {nombre}"])
-            w.writerow([f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"])
-            w.writerow([])
-            w.writerow(headers)
-            w.writerows(rows)
-            w.writerow([])
-            w.writerow(["","","TOTAL",f"{total} horas"])
-
-        os.startfile(carpeta_usuario)
-        return render_template(
-            "mensaje_empresa.html",
-            mensaje=f"Informe CSV generado correctamente",
-            ruta=archivo
-        )
-
-    # ================= PDF =================
-    else:
-        from reportlab.platypus import Image
-        import os
-
-        # 📁 Carpeta destino
-        carpeta_pdf = os.path.join(os.getcwd(), "informes_pdf")
-        os.makedirs(carpeta_pdf, exist_ok=True)
-
-        # 📝 Nombre archivo
-        
-        fecha_archivo = datetime.now().strftime("%Y-%m-%d_%H-%M")
-        nombre_archivo = f"registro_{nombre}_{fecha_archivo}.pdf"
-        
-        ruta_pdf = os.path.join(carpeta_pdf, nombre_archivo)
-        #from datetime import datetime
+            with open(archivo, "w", newline="", encoding="utf-8-sig") as f:
+                w = csv.writer(f, delimiter=";")
+                w.writerow(["BELLEAR ENGLISH"])
+                w.writerow(["REGISTRO OFICIAL DE JORNADA"])
+                w.writerow([])
+                w.writerow([f"Empleado: {nombre}"])
+                w.writerow([f"Generado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"])
+                w.writerow([])
+                w.writerow(headers)
+                w.writerows(rows)
+                w.writerow([])
+                w.writerow(["","","TOTAL",f"{total} horas"])
 
         
+            with open(archivo, "rb") as f:
+                enviar_email(
+                    "oficina.bellearenglish@gmail.com",
+                    f"Informe CSV {nombre}",
+                    "Adjunto informe generado por Bellear.",
+                    f.read(),
+                    os.path.basename(archivo)
+                )
+        #os.startfile(carpeta_usuario)
+            return render_template(
+                "mensaje_empresa.html",
+                mensaje=f"Informe CSV generado correctamente",
+                ruta=archivo
+            )
+        # ================= PDF =================
+        else:
+            from reportlab.platypus import Image
+            import os
 
-        # 📄 Crear PDF DIRECTO en archivo
-        doc = SimpleDocTemplate(ruta_pdf)
-        styles = getSampleStyleSheet()
+            # 📁 Carpeta destino
+            carpeta_pdf = os.path.join(os.getcwd(), "informes_pdf")
+            os.makedirs(carpeta_pdf, exist_ok=True)
 
-        elements = []
+            # 📝 Nombre archivo
+            
+            fecha_archivo = datetime.now().strftime("%Y-%m-%d_%H-%M")
+            nombre_archivo = f"registro_{nombre}_{fecha_archivo}.pdf"
+            
+            ruta_pdf = os.path.join(carpeta_pdf, nombre_archivo)
+            #from datetime import datetime
 
-        # 🖼 LOGO
-        logo_path = os.path.join(os.getcwd(), "static", "logo.png")
-        if os.path.exists(logo_path):
-            elements.append(Image(logo_path, width=120, height=60))
+            
+
+            # 📄 Crear PDF DIRECTO en archivo
+            doc = SimpleDocTemplate(ruta_pdf)
+            styles = getSampleStyleSheet()
+
+            elements = []
+
+            # 🖼 LOGO
+            logo_path = os.path.join(os.getcwd(), "static", "logo.png")
+            if os.path.exists(logo_path):
+                elements.append(Image(logo_path, width=120, height=60))
+                elements.append(Spacer(1,10))
+
+            # CABECERA
+            elements.append(Paragraph("BELLEAR ENGLISH", styles["Title"]))
+            elements.append(Paragraph("REGISTRO OFICIAL DE JORNADA LABORAL", styles["Heading2"]))
             elements.append(Spacer(1,10))
+            elements.append(Paragraph(f"Empleado: <b>{nombre}</b>", styles["Heading2"]))
+            elements.append(Spacer(1,20))
 
-        # CABECERA
-        elements.append(Paragraph("BELLEAR ENGLISH", styles["Title"]))
-        elements.append(Paragraph("REGISTRO OFICIAL DE JORNADA LABORAL", styles["Heading2"]))
-        elements.append(Spacer(1,10))
-        elements.append(Paragraph(f"Empleado: <b>{nombre}</b>", styles["Heading2"]))
-        elements.append(Spacer(1,20))
+            # TABLA
+            data = [headers] + rows + [["","","TOTAL",f"{total} horas"]]
+            table = Table(data)
+            table.setStyle(TableStyle([
+                ("GRID",(0,0),(-1,-1),1,colors.black),
+                ("BACKGROUND",(0,0),(-1,0),colors.lightgrey)
+            ]))
 
-        # TABLA
-        data = [headers] + rows + [["","","TOTAL",f"{total} horas"]]
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ("GRID",(0,0),(-1,-1),1,colors.black),
-            ("BACKGROUND",(0,0),(-1,0),colors.lightgrey)
-        ]))
+            elements.append(table)
+            
+            # ✍️ PIE EMPRESA
+            elements.append(Spacer(1,30))
+            elements.append(Paragraph("Paseo José Saramago 3 Local 3", styles["Normal"]))
+            elements.append(Paragraph("Orkoien - Navarra", styles["Normal"]))
+            elements.append(Paragraph("Fdo. Bellkys Moreno", styles["Normal"]))
+            
+            # 🏁 Construir PDF
+            doc.build(elements)
+            with open(ruta_pdf, "rb") as f:
+                enviar_email(
+                    "oficina.bellearenglish@gmail.com",
+                    f"Informe pdf {nombre_archivo}",
+                    "Adjunto informe generado por Bellear.",
+                    f.read(),
+                    os.path.basename(nombre_archivo)
+                )
 
-        elements.append(table)
-        
-        # ✍️ PIE EMPRESA
-        elements.append(Spacer(1,30))
-        elements.append(Paragraph("Paseo José Saramago 3 Local 3", styles["Normal"]))
-        elements.append(Paragraph("Orkoien - Navarra", styles["Normal"]))
-        elements.append(Paragraph("Fdo. Bellkys Moreno", styles["Normal"]))
-        
-        # 🏁 Construir PDF
-        doc.build(elements)
-
-        # 📥 Pantalla información de fichero creado
-        
-        return render_template(
-            "mensaje_empresa.html",
-            mensaje=f"Informe PDF generado correctamente",
-            ruta_pdf=nombre_archivo
-        )
-    
+            # 📥 Pantalla información de fichero creado
+            
+            return render_template(
+                "mensaje_empresa.html",
+                mensaje=f"Informe PDF generado correctamente",
+                ruta_pdf=nombre_archivo
+            )
+    except Exception as e:
+        print("ERROR EXPORT:", e)
+        return f"Error generando informe: {e}", 500    
 
 # =====================================================
 # SALIR
@@ -831,8 +805,53 @@ def exit_app():
 def abrir_navegador():
     webbrowser.open("http://127.0.0.1:5000")
 
-if __name__ == "__main__":
-    threading.Timer(1.2, abrir_navegador).start()
-    #app.run()
-    app.run(host="0.0.0.0", port=5000, debug=True)
 
+# VENTANA EMERGENTE DE ERRORES
+@app.errorhandler(401)
+def error_401(e):
+    return render_template(
+        "error.html",
+        titulo="Sesión caducada",
+        mensaje="Debes iniciar sesión para continuar.",
+        logo=True
+    ), 401
+
+
+@app.errorhandler(403)
+def error_403(e):
+    return render_template(
+        "error.html",
+        titulo="Acceso denegado",
+        mensaje="No tienes permiso para realizar esta acción.",
+        logo=True
+    ), 403
+
+
+@app.errorhandler(404)
+def error_404(e):
+    return render_template(
+        "error.html",
+        titulo="Página no encontrada",
+        mensaje="La dirección solicitada no existe.",
+        logo=True
+    ), 404
+
+
+@app.errorhandler(500)
+def error_500(e):
+    return render_template(
+        "error.html",
+        titulo="Error interno del sistema",
+        mensaje="Se ha producido un problema inesperado.",
+        logo=True
+    ), 500
+
+#if __name__ == "__main__":
+ #   threading.Timer(1.2, abrir_navegador).start()
+  #  #app.run()
+  #  app.run(host="0.0.0.0", port=5000, debug=True)
+if __name__ == "__main__":
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        threading.Timer(1.2, abrir_navegador).start()
+
+    app.run(host="0.0.0.0", port=5000, debug=True)

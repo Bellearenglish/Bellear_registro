@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.mobile-box{
+    max-width:420px;
+    margin:auto;
+}
+
+.btn-fichar{
+    width:100%;
+    padding:18px;
+    font-size:20px;
+    border-radius:14px;
+    margin-top:10px;
+}
+
+.estado{
+    font-size:22px;
+    font-weight:bold;
+    padding:10px;
+    border-radius:10px;
+}
+
+.estado-dentro{
+    background:#d1e7dd;
+    color:#0f5132;
+}
+
+.estado-fuera{
+    background:#f8d7da;
+    color:#842029;
+}
+</style>
+
+<h4 class="mb-3">Panel de fichaje</h4>
+<div class="mobile-box">
+<!-- FILA SUPERIOR: FICHAJE + EXPORTACIÓN -->
+<div class="row align-items-end mb-4">
+
+    <!-- ENTRADA / SALIDA -->
+    <div class="col-md-6 mb-3">
+        {% if estado == "fuera" %}
+            <a href="/fichar/entrada" class="btn btn-success me-2">
+                Entrada
+            </a>
+        {% else %}
+            <button class="btn btn-success me-2" disabled>
+                Entrada
+            </button>
+        {% endif %}
+
+        {% if estado == "dentro" %}
+            <a href="/fichar/salida" class="btn btn-danger">
+                Salida
+            </a>
+        {% else %}
+            <button class="btn btn-danger" disabled>
+                Salida
+            </button>
+        {% endif %}
+    </div>
+
+    <!-- EXPORTAR RANGO -->
+    <div class="col-md-6">
+        <form method="get" action="/exportar_rango" class="row g-2 align-items-end">
+
+            <div class="col-md-4">
+                <label class="form-label">Desde</label>
+                <input type="date" name="desde" class="form-control" required>
+            </div>
+
+            <div class="col-md-4">
+                <label class="form-label">Hasta</label>
+                <input type="date" name="hasta" class="form-control" required>
+            </div>
+
+            <div class="col-md-4 text-md-end">
+                <button type="submit" name="tipo" value="csv" class="btn btn-outline-secondary me-2">
+                    Exportar CSV
+                </button>
+                <button type="submit" name="tipo" value="pdf" class="btn btn-outline-danger">
+                    Exportar PDF
+                </button>
+            </div>
+
+        </form>
+    </div>
+
+</div>
+
+<hr>
+
+<h5>Horas trabajadas</h5>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Entrada</th>
+            <th>Salida</th>
+            <th>Horas</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for j in jornadas %}
+        <tr>
+            <td>{{ j[0] }}</td>
+            <td>{{ j[1] }}</td>
+            <td>{{ j[2] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<p class="fw-bold">
+    Total trabajado: {{ total_horas }} horas
+</p>
+
+<p class="mb-3">
+    Estado actual:
+    {% if estado == "dentro" %}
+        <span class="badge bg-success">Trabajando</span><br>
+        <small class="text-muted">
+            Pulse <strong>Salida</strong> para finalizar la jornada.
+        </small>
+    {% else %}
+        <span class="badge bg-secondary">Fuera</span><br>
+        <small class="text-muted">
+            Pulse <strong>Entrada</strong> para iniciar la jornada.
+        </small>
+    {% endif %}
+</p>
+
+<hr>
+
+<h5>Historial de fichajes</h5>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Tipo</th>
+            <th>Fecha</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for f in fichajes %}
+        <tr>
+            <td>
+                {% if f[0] == 'entrada' %}
+                    <span class="badge bg-success">Entrada</span>
+                {% else %}
+                    <span class="badge bg-danger">Salida</span>
+                {% endif %}
+            </td>
+            <td>{{ f[1] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

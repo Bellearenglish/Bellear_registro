@@ -41,7 +41,45 @@
     </style>
 </head>
 
+<!-- MODAL ACCESO DENEGADO -->
+<div class="modal fade" id="modalPermiso" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">Acceso denegado</h5>
+      </div>
+
+      <div class="modal-body">
+        No tienes permisos para realizar esta acción.
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">
+          Cerrar
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+<!----Script para mostrar el modal
+
+<script>
+
+function sinPermiso(){
+    var modal = new bootstrap.Modal(document.getElementById('modalPermiso'));
+    modal.show();
+}
+</script>
+
+
 <body>
+
+<!---- Ocultar menú a usuarios normales------>
+	<!---{% if current_user.is_admin %}-->
+	<!---<a href="/exportar" class="btn btn-primary">Exportar</a>-->
+	<!---{% endif %}-->
 
 <!-- NAVBAR -->
 <nav class="navbar navbar-dark bg-primary shadow">
